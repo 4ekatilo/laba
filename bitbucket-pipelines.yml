@@ -1,0 +1,35 @@
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Сборка Docker образа и Деплой криптосервиса (Вариант 22)
+          runs-on:
+            - self-hosted
+            - linux
+          script:
+            - echo "Старт автоматического конвейера развертывания..."
+            - |
+              if [ "$(docker ps -aq -f name=crypto-token-service)" ]; then
+                echo "Деактивация устаревшей версии контейнера..."
+                docker stop crypto-token-service
+                docker rm crypto-token-service
+              fi
+            - echo "Сборка нового изолированного артефакта..."
+            - docker build --pull -t token-service:latest .
+            - echo "Инициализация нового экземпляра контейнера..."
+            - |
+              docker run -d \
+                --name crypto-token-service \
+                -p 8082:80 \
+                --restart always \
+                token-service:latest
+            - echo "Выполнение автоматического интеграционного тестирования (Health Check)..."
+            - sleep 3
+            - HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8082/)
+            - |
+              if [ "$HTTP_STATUS" -eq 200 ]; then
+                echo "Health Check пройден успешно! Статус 200 OK."
+              else
+                echo "Пайплайн завален! Неверный ответ сервера."
+                exit 1
+              fi
